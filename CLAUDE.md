@@ -4,29 +4,44 @@ Guidance for Claude (or any coding agent) working in this repository.
 
 ## Project
 
-Fine-tuning an open-weight LLM for the **homeowners insurance domain** (policy Q&A,
-coverage explanation, claims process guidance), with hallucination mitigation,
-LLM-as-judge evaluation, RAGAS metrics, and deployment as a chat app on Hugging Face Spaces.
+A three-stage LLM fine-tuning pipeline, built with **Unsloth**, that turns a
+small open-weight base model into a domain-specific assistant for
+**homeowners insurance in California, USA**. This is a hands-on fine-tuning
+exercise: the goal is to demonstrate the full workflow — raw-text domain
+adaptation, instruction tuning, and preference alignment — not to build a
+production system.
 
-Training happens on **Google Colab free-tier GPU (T4, ~15GB VRAM)**, so the model
-and training method (QLoRA, 4-bit) must fit that budget.
+Pipeline:
+
+```
+Base Model (Qwen2.5-0.5B)
+   ↓ Stage 1: Non-instruction fine-tuning (raw domain text, LoRA/QLoRA)
+   ↓ Stage 2: Instruction fine-tuning (instruction/response pairs, LoRA/QLoRA)
+   ↓ Stage 3: DPO preference alignment (chosen/rejected pairs)
+Final domain-specific AI assistant
+```
+
+Training happens on **Google Colab free-tier GPU (T4, ~15GB VRAM)** via
+Unsloth. There is no local GPU in this dev environment — the local `.venv`
+is for linting/formatting and running `src/inference.py` against an already
+fine-tuned model only.
 
 ## Spec-Driven Development Workflow
 
-This repo follows spec-driven development. **Do not start implementation without
-a spec.** The workflow is:
+This repo follows spec-driven development. **Do not start implementation
+without a spec.** The workflow is:
 
-1. **Spec** (`specs/NNN-name.md`) — what to build and why, acceptance criteria.
-   Read `specs/001-homeowners-insurance-finetune.md` before touching anything.
+1. **Spec** (`specs/NNN-name.md`) — what to build and why, acceptance
+   criteria. Read `specs/002-unsloth-ca-homeowners-finetune.md` before
+   touching anything.
 2. **Plan** — before writing code for a spec section, write a short plan
    (files to touch, approach, risks) and confirm it matches the spec's
    acceptance criteria.
 3. **Tasks** — break the plan into small, independently testable tasks.
-4. **Implement** — one task at a time. Every task that touches model
-   behavior or data must include or update an eval.
-5. **Verify** — run the eval suite (RAGAS + LLM-as-judge, see `eval/`) before
-   marking a task done. A task is not complete if it regresses faithfulness
-   or hallucination scores below the thresholds in the spec.
+4. **Implement** — one task/stage at a time.
+5. **Verify** — after each fine-tuning stage, run the same fixed question
+   set through the model and update the relevant `reports/*.md` comparison
+   table before marking the stage done.
 
 If a request conflicts with the spec, flag the conflict instead of silently
 reinterpreting the spec.
@@ -37,67 +52,83 @@ reinterpreting the spec.
 |---|---|
 | Language | Python 3.11 |
 | Training env | Google Colab (free T4 GPU) |
-| Fine-tuning | PEFT (QLoRA, 4-bit via bitsandbytes), `trl` SFTTrainer / DPOTrainer |
-| Base model | Small instruct model that fits T4 in 4-bit (see spec for candidates) |
-| Retrieval / grounding | FAISS or Chroma vector store over curated insurance corpus |
-| Eval | RAGAS (faithfulness, answer relevancy, context precision/recall) + LLM-as-judge rubric |
-| Serving | Hugging Face Spaces, Gradio `ChatInterface` |
-| Dependency mgmt | `requirements.txt` per subproject (Colab installs by pip, no lockfile needed) |
+| Fine-tuning | [Unsloth](https://github.com/unslothai/unsloth) + `peft` (LoRA/QLoRA, 4-bit via bitsandbytes) + `trl` (`SFTTrainer`, `DPOTrainer`) |
+| Base model | `Qwen/Qwen2.5-0.5B` (see spec §6 for stage-by-stage config) |
+| Eval | Manual before/after comparison on a fixed question set, scored against a written rubric (correctness, domain accuracy, clarity, safety, helpfulness) — see `reports/` |
+| Inference | Plain Python script (`src/inference.py`), no serving layer |
+| Dependency mgmt | `pyproject.toml`/`uv.lock` for local dev tooling; `requirements.txt` at repo root for Colab `pip install` |
 
 ## Repo Layout
 
 ```
-homeowners-insurance-llm/
+LLM-FineTunning/
 ├── CLAUDE.md
+├── README.md
+├── requirements.txt
 ├── specs/
-│   └── 001-homeowners-insurance-finetune.md
-├── data/              # dataset build scripts, curated QA pairs, source docs (not raw PII)
-├── notebooks/         # Colab notebooks (fine-tuning, data prep, eval)
-├── eval/              # RAGAS + LLM-as-judge scripts, eval datasets, results
-└── app/               # Gradio app for HF Spaces deployment
+│   └── 002-unsloth-ca-homeowners-finetune.md
+├── data/
+│   ├── 1-non_instruction_data.txt      # ≥50 raw domain paragraphs
+│   ├── 2-instruction_dataset.jsonl     # ≥100 instruction/response pairs
+│   └── 3-preference_dataset.jsonl      # ≥50 chosen/rejected pairs (DPO)
+├── notebooks/
+│   ├── 1-non_instruction_finetuning.ipynb
+│   ├── 2-instruction_finetuning.ipynb
+│   └── 3-dpo_alignment.ipynb
+├── reports/
+│   ├── base_model_evaluation.md
+│   ├── sft_model_comparison.md
+│   ├── final_evaluation.md
+│   └── fine_tuning_explanation.md
+└── src/
+    └── inference.py
 ```
 
 ## Conventions
 
 - **Type hints everywhere.** `ruff` + `black` formatting. No bare `except:`.
-- **Notebooks are thin.** Business logic (data prep, training loop config, eval
-  scoring) lives in importable `.py` modules under `data/`, `eval/`, `app/`;
-  notebooks just orchestrate calls into them. This keeps the code testable
-  outside Colab and diffable in git.
-- **No fact injection during fine-tuning.** Do not fine-tune the model to
-  memorize specific numeric coverage limits, dollar amounts, or state-specific
-  rules as if they were universal facts — insurance terms vary by policy,
-  carrier, and state. Train the model to *explain concepts and reason over
-  retrieved policy text*, not to recite memorized figures. See spec §5.
-- **Every hallucination-relevant change needs an eval run.** If you touch
-  prompts, retrieval, training data, or decoding params, run `eval/run_eval.py`
-  and report the before/after RAGAS + judge scores in the PR/commit message.
-- **Secrets** (HF tokens, judge-model API keys) go in Colab secrets /
-  environment variables — never hardcoded, never committed.
-- **Dataset provenance matters.** Every training example must be traceable to
-  a source (public ISO/state DOI guidance, licensed corpus, or synthetic-with-
-  disclaimer). Do not scrape or fabricate content presented as authoritative
-  insurance fact.
+- **Notebooks are thin.** Shared logic (data loading, prompt formatting,
+  generation helpers) lives in importable `.py` modules under `src/`;
+  notebooks orchestrate calls into them so code is diffable and reusable
+  across the three stages.
+- **This project *is* fact injection, by design.** Unlike a RAG-grounded
+  assistant, Stage 1 and Stage 2 deliberately train the model to internalize
+  California homeowners-insurance terminology, concepts, and example
+  figures. There is no retrieval step and no requirement to hedge on every
+  number — that's the point of the exercise. Keep this in mind when writing
+  training data: it should read like confident domain knowledge, not
+  refusal-heavy RAG output.
+- **Dataset provenance matters.** All training data (raw paragraphs,
+  instruction pairs, preference pairs) is AI-generated synthetic content
+  based on general/public knowledge of CA homeowners insurance (HO-3
+  basics, CA FAIR Plan, CA DOI processes, wildfire/earthquake nuances) —
+  explicitly disclosed as synthetic in `README.md` and `data/`. Do not
+  reproduce copyrighted carrier policy language verbatim, and do not
+  present any specific dollar figure/limit as if drawn from a real policy.
+- **Every stage needs a report update.** If you touch training data,
+  hyperparameters, or prompts for a given stage, re-run the fixed
+  10-question set through the affected model(s) and update the
+  corresponding `reports/*.md` comparison table — don't leave it stale.
+- **Secrets** (HF tokens) go in Colab secrets / environment variables —
+  never hardcoded, never committed.
 
 ## Commands (reference — see spec for full setup)
 
 ```bash
 # local dev / linting (not training — training runs in Colab)
-pip install -r requirements-dev.txt
+uv sync
 ruff check .
 black --check .
 
-# run eval suite locally against a deployed/local model endpoint
-python eval/run_eval.py --config eval/config.yaml
-
-# launch chat app locally before pushing to HF Spaces
-python app/app.py
+# run inference against the final DPO-aligned model
+python src/inference.py
 ```
 
 ## Definition of Done (applies to every task)
 
 - Meets the acceptance criteria in the relevant spec section.
 - Passes lint/format checks.
-- If model-behavior-affecting: eval suite run, scores meet or exceed the
-  thresholds in `specs/001-homeowners-insurance-finetune.md` §8.
-- No secrets committed. No raw customer PII in `data/`.
+- If model-behavior-affecting: the fixed-question comparison in the
+  relevant `reports/*.md` file is updated and reflects the current model.
+- No secrets committed. No real customer PII or real carrier policy text
+  in `data/`.

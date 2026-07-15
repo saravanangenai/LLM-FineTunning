@@ -1,0 +1,15 @@
+# Colab requirements for the Unsloth fine-tuning pipeline (Stages 1-3).
+# Install with: pip install -r requirements.txt
+# On Colab, Unsloth resolves the correct torch/CUDA-matched build for the
+# current runtime, so `pip install unsloth` alone is usually sufficient;
+# this file pins the fuller dependency set for reproducibility.
+unsloth
+torch
+transformers>=4.44.0
+trl>=0.9.0
+peft>=0.11.0
+accelerate>=0.30.0
+bitsandbytes>=0.43.0
+datasets>=2.19.0
+sentencepiece
+huggingface_hub
