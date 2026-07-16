@@ -52,3 +52,15 @@ def add_lora_adapters(model, **overrides: Any):
 
     config = {**DEFAULT_LORA_CONFIG, **overrides}
     return FastLanguageModel.get_peft_model(model, **config)
+
+
+def save_merged_model(
+    model, tokenizer, out_dir: str, save_method: str = "merged_16bit"
+) -> None:
+    """Save a full merged (base weights + LoRA) checkpoint, per spec §6.4.
+
+    The next stage loads this directory as a fresh base model via
+    `load_base_model` and attaches its own new LoRA adapters, rather than
+    resuming training on top of the previous stage's PEFT wrapper.
+    """
+    model.save_pretrained_merged(out_dir, tokenizer, save_method=save_method)
