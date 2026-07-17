@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Fine-tuned model checkpoints/adapters (Colab outputs) — too large for git,
+# not source. Persisted via the notebooks' download/upload cells instead.
+models/
+outputs/
