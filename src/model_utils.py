@@ -5,6 +5,18 @@ from typing import Any
 BASE_MODEL_NAME = "Qwen/Qwen2.5-0.5B"
 MAX_SEQ_LENGTH = 1024
 
+# Qwen/Qwen2.5-0.5B is the base (non-instruct) checkpoint, so its tokenizer
+# ships with no chat_template — apply_chat_template() raises without one.
+# This is the same ChatML format Qwen2.5-Instruct's tokenizer uses.
+QWEN_CHATML_TEMPLATE = (
+    "{% for message in messages %}"
+    "{{ '<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>\n' }}"
+    "{% endfor %}"
+    "{% if add_generation_prompt %}"
+    "{{ '<|im_start|>assistant\n' }}"
+    "{% endif %}"
+)
+
 # Spec 002 §6.3 starting hyperparameters (Stage 1 & 2; Stage 3 DPO overrides lr separately).
 DEFAULT_LORA_CONFIG: dict[str, Any] = {
     "r": 16,
@@ -43,6 +55,8 @@ def load_base_model(
         load_in_4bit=load_in_4bit,
         dtype=None,
     )
+    if tokenizer.chat_template is None:
+        tokenizer.chat_template = QWEN_CHATML_TEMPLATE
     return model, tokenizer
 
 
