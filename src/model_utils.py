@@ -64,3 +64,20 @@ def save_merged_model(
     resuming training on top of the previous stage's PEFT wrapper.
     """
     model.save_pretrained_merged(out_dir, tokenizer, save_method=save_method)
+
+
+def push_folder_to_hub(
+    folder: str, repo_id: str, token: str, private: bool = True
+) -> None:
+    """Upload an already-saved local checkpoint folder (adapter or merged) to the
+    Hugging Face Hub, creating the repo if it doesn't exist yet.
+
+    Used to move a checkpoint between Colab sessions without a slow browser
+    upload/download round trip (see spec §6.4) — the next stage's notebook
+    loads `repo_id` directly via `load_base_model`.
+    """
+    from huggingface_hub import HfApi
+
+    api = HfApi(token=token)
+    api.create_repo(repo_id, private=private, exist_ok=True)
+    api.upload_folder(folder_path=folder, repo_id=repo_id, repo_type="model")
