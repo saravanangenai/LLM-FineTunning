@@ -1,5 +1,6 @@
 """Shared Unsloth model-loading and LoRA helpers used across all three fine-tuning stages."""
 
+from pathlib import Path
 from typing import Any
 
 BASE_MODEL_NAME = "Qwen/Qwen2.5-0.5B"
@@ -35,6 +36,18 @@ DEFAULT_LORA_CONFIG: dict[str, Any] = {
     "use_gradient_checkpointing": "unsloth",
     "random_state": 42,
 }
+
+
+def resolve_stage_source(label: str, local_dir: Path, hf_repo: str) -> str:
+    """Return `local_dir` if it exists (e.g. the previous stage ran in this
+    same Colab session), else `hf_repo` — the shared "load the previous
+    stage's checkpoint" fallback used at the start of every stage after the
+    first (see spec §6.4).
+    """
+    if local_dir.exists():
+        return str(local_dir)
+    print(f"{label} not found locally — pulling from the Hugging Face Hub: {hf_repo}")
+    return hf_repo
 
 
 def load_base_model(
@@ -95,3 +108,13 @@ def push_folder_to_hub(
     api = HfApi(token=token)
     api.create_repo(repo_id, private=private, exist_ok=True)
     api.upload_folder(folder_path=folder, repo_id=repo_id, repo_type="model")
+
+
+def push_stage_outputs(adapter_dir: str, merged_dir: str, repo_id: str, token: str) -> None:
+    """Push a stage's adapter and merged-model checkpoints to the Hub as
+    `{repo_id}-adapter` and `{repo_id}` respectively, then print the merged
+    model's URL — the shared shape of every stage's persistence cell.
+    """
+    push_folder_to_hub(adapter_dir, repo_id + "-adapter", token=token)
+    push_folder_to_hub(merged_dir, repo_id, token=token)
+    print("Pushed merged model to:", f"https://huggingface.co/{repo_id}")
