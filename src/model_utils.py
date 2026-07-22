@@ -110,7 +110,9 @@ def push_folder_to_hub(
     api.upload_folder(folder_path=folder, repo_id=repo_id, repo_type="model")
 
 
-def push_stage_outputs(adapter_dir: str, merged_dir: str, repo_id: str, token: str) -> None:
+def push_stage_outputs(
+    adapter_dir: str, merged_dir: str, repo_id: str, token: str
+) -> None:
     """Push a stage's adapter and merged-model checkpoints to the Hub as
     `{repo_id}-adapter` and `{repo_id}` respectively, then print the merged
     model's URL — the shared shape of every stage's persistence cell.
