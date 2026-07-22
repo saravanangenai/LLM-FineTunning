@@ -133,3 +133,10 @@ non-persistent local disk. The next stage pulls the previous stage's
 *merged* checkpoint as its new starting "base" and attaches a fresh set of
 LoRA adapters (`src/model_utils.resolve_stage_source`), rather than
 resuming training on top of the previous stage's PEFT wrapper directly.
+
+One exception in the as-run pipeline: Stage 2's merged checkpoint was never
+pushed (only `...-stage2-adapter` exists on the Hub) — Stage 3 continued
+from the Stage 2 model still resident in the same Colab session instead of
+re-pulling it. `reports/sft_model_comparison.md` reproduces the equivalent
+model locally (Stage 1 merged base + Stage 2 adapter via `peft`) for its
+evaluation.
