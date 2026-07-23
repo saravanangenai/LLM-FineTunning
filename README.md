@@ -116,16 +116,14 @@ ruff check .
 black --check .
 ```
 
-**Inference** (against the final Stage 3 model, via a Hugging Face Dedicated
-Inference Endpoint):
+**Inference** (locally, CPU, against the final Stage 3 model):
 ```bash
 python -m src.inference
 ```
-Create/start the endpoint for `sharanmini/qwen2.5-0.5b-ca-homeowners-final`
-via the [HF UI](https://ui.endpoints.huggingface.co) (billed hourly while
-running — pause it when done), then set `HF_ENDPOINT_URL` and `HF_TOKEN`
-before running the script. Import `generate_answer(question: str) -> str`
-from `src.inference` to ask your own.
+Loads `sharanmini/qwen2.5-0.5b-ca-homeowners-final` via plain `transformers`
+(no GPU needed for a 0.5B model) and answers a sample question. Import
+`generate_answer(question: str) -> str` from `src.inference` to ask your
+own.
 
 ## Limitations & disclaimers
 

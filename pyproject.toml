@@ -18,4 +18,6 @@ dev = [
     "huggingface-hub>=1.23.0",
     "python-dotenv>=1.2.2",
     "ruff>=0.15.21",
+    "torch>=2.13.0",
+    "transformers>=5.14.1",
 ]
