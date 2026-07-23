@@ -43,8 +43,14 @@ workflow, not a production RAG system (see §3).
 - **No RAGAS or automated judge pipeline.** Evaluation is a human
   (Claude-authored) comparison table against a written rubric, not an
   automated metrics gate.
-- **No deployment.** No Hugging Face Spaces app, no hosted chat UI. The
-  deliverable stops at a local inference script.
+- **No custom hosted chat UI / Spaces app.** No Gradio/Streamlit app, no
+  bespoke web frontend. `src/inference.py` is the only inference surface.
+  (Exception: as of 2026-07-22, `src/inference.py` calls the final model
+  through a Hugging Face **Dedicated Inference Endpoint** rather than
+  loading weights in-process — see §9. This was an explicit, cost-aware
+  choice by the project owner, made knowing it deviates from this spec's
+  original "no deployment, local-only" framing and incurs hourly HF
+  billing while the endpoint is running.)
 - Not a licensed-agent replacement or source of binding coverage
   determinations — responses should carry an implicit "example only, not
   insurance advice" framing in the system prompt, but heavy hedging is not
@@ -208,10 +214,24 @@ differs).
 
 ## 9. Inference Script
 
-`src/inference.py` — loads the final DPO-aligned adapter/model and exposes
-a `generate_answer(question: str) -> str` function, plus a `__main__` block
-demonstrating one example (per assignment's example: "How can I apply for
-reimbursement?" pattern, adapted to a homeowners-insurance question).
+`src/inference.py` exposes a `generate_answer(question: str) -> str`
+function, plus a `__main__` block demonstrating one example (per
+assignment's example: "How can I apply for reimbursement?" pattern, adapted
+to a homeowners-insurance question).
+
+It calls the final DPO-aligned model via a Hugging Face **Dedicated
+Inference Endpoint** (`huggingface_hub.InferenceClient` pointed at the
+endpoint's URL), rather than loading the checkpoint in-process. This
+requires:
+
+- The endpoint created and running (via the HF UI or
+  `huggingface_hub.create_inference_endpoint`) for the `HF_STAGE3_REPO`
+  model — owner provisions/pauses this manually since it bills hourly.
+- `HF_ENDPOINT_URL` env var set to the endpoint's URL.
+- `HF_TOKEN` env var set to an HF token with access to the endpoint.
+
+This is a deliberate deviation from the original "local-only, no
+deployment" framing (see §3) — decided 2026-07-22.
 
 ## 10. Repo Layout
 
@@ -244,8 +264,9 @@ assignment's required final structure.
 - [ ] `reports/base_model_evaluation.md`, `reports/sft_model_comparison.md`,
       `reports/final_evaluation.md`, and `reports/fine_tuning_explanation.md`
       all exist and are complete per §8.2.
-- [ ] `src/inference.py` runs locally against the final saved model/adapter
-      and returns an answer for an example question.
+- [ ] `src/inference.py` runs locally and returns an answer for an example
+      question by calling the final model via its Hugging Face Dedicated
+      Inference Endpoint (`HF_ENDPOINT_URL`).
 - [ ] `README.md` covers all 14 required points from the assignment brief.
 - [ ] No secrets, real PII, or verbatim copyrighted policy text committed.
 

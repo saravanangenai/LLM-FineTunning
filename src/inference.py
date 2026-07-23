@@ -1,47 +1,44 @@
 """Standalone inference against the final Stage 3 (DPO-aligned) model.
 
-Loads the merged Hugging Face checkpoint directly via `transformers` (no
-Unsloth/bitsandbytes — those require a CUDA GPU, which this local dev
-environment does not have; the merged checkpoint is a plain 16-bit HF model
-so CPU inference works fine for a 0.5B model).
+Calls the model through a Hugging Face Dedicated Inference Endpoint (see
+specs/002-unsloth-ca-homeowners-finetune.md §9) rather than loading weights
+in-process, so this only needs `huggingface_hub` locally — no
+torch/transformers/GPU required.
+
+Requires the endpoint to already be running (create/pause it via the HF UI
+or `huggingface_hub.create_inference_endpoint` — that's a billed action, so
+it's not automated here) and these env vars:
+    HF_ENDPOINT_URL - the endpoint's URL
+    HF_TOKEN        - an HF token with access to the endpoint
 """
 
 import os
 import sys
 from functools import lru_cache
 
-from src.generation_utils import generate
-from src.prompts import SYSTEM_PROMPT
+from huggingface_hub import InferenceClient
 
-FINAL_MODEL_REPO = os.environ.get(
-    "HF_FINAL_REPO", "sharanmini/qwen2.5-0.5b-ca-homeowners-final"
-)
+from src.prompts import SYSTEM_PROMPT
 
 
 @lru_cache(maxsize=1)
-def _load_model():
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    token = os.environ.get("HF_TOKEN")
-    tokenizer = AutoTokenizer.from_pretrained(FINAL_MODEL_REPO, token=token)
-    model = AutoModelForCausalLM.from_pretrained(FINAL_MODEL_REPO, token=token)
-    model.eval()
-    return model, tokenizer
+def _client() -> InferenceClient:
+    endpoint_url = os.environ["HF_ENDPOINT_URL"]
+    token = os.environ["HF_TOKEN"]
+    return InferenceClient(base_url=endpoint_url, token=token)
 
 
 def generate_answer(question: str) -> str:
-    """Answer `question` using the final DPO-aligned model."""
-    model, tokenizer = _load_model()
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question},
-    ]
-    prompt = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
+    """Answer `question` using the final DPO-aligned model via the HF endpoint."""
+    completion = _client().chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ],
+        max_tokens=200,
+        temperature=0.7,
     )
-    return generate(
-        model, tokenizer, prompt, max_new_tokens=200, temperature=0.7
-    ).strip()
+    return completion.choices[0].message.content.strip()
 
 
 if __name__ == "__main__":
